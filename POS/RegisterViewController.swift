@@ -7,6 +7,7 @@
 //
 
 import UIKit
+import POSKit
 
 class RegisterViewController: UIViewController {
     let cellIdentifier = "Cell"
@@ -19,15 +20,28 @@ class RegisterViewController: UIViewController {
     @IBOutlet weak var taxLabel: UILabel!
     @IBOutlet weak var totalLabel: UILabel!
     
-    let viewModel = RegisterViewModel()
+    let viewModel = RegisterViewModel(menu: AppMenu)
+    
+    var billUpdatedNotifier: Notifier!
     
     override func viewDidLoad() {
         super.viewDidLoad()
+        
+        viewModel.modelUpdated = { [weak self] () in
+            self?.updateTotals()
+        }
         
         menuTableView.dataSource = self
         orderTableView.dataSource = self
         menuTableView.delegate = self
         orderTableView.delegate = self
+    }
+    
+    func updateTotals() {
+        subtotalLabel.text = viewModel.subtotalString()
+        taxLabel.text = viewModel.taxString()
+        discountsLabel.text = viewModel.discountsString()
+        totalLabel.text = viewModel.totalString()
     }
     
     @IBAction func showTaxes() {
@@ -41,6 +55,7 @@ class RegisterViewController: UIViewController {
         vc.modalPresentationStyle = .formSheet
         present(vc, animated: true, completion: nil)
     }
+    
 }
 
 extension RegisterViewController: UITableViewDataSource, UITableViewDelegate {
@@ -95,11 +110,12 @@ extension RegisterViewController: UITableViewDataSource, UITableViewDelegate {
         if tableView == menuTableView {
             let indexPaths = [viewModel.addItemToOrder(at: indexPath)]
             orderTableView.insertRows(at: indexPaths, with: .automatic)
-            // calculate bill totals
-        
+            updateTotals()
+
         } else if tableView == orderTableView {
             viewModel.toggleTaxForOrderItem(at: indexPath)
             tableView.reloadRows(at: [indexPath], with: .automatic)
+            updateTotals()
         }
     }
     
@@ -117,11 +133,10 @@ extension RegisterViewController: UITableViewDataSource, UITableViewDelegate {
         if tableView == orderTableView && editingStyle == .delete {
             viewModel.removeItemFromOrder(at: indexPath)
             orderTableView.deleteRows(at: [indexPath], with: .automatic)
-            // calculate bill totals
+            updateTotals()
         }
     }
 }
-
 
 class RegisterViewModel {
     let formatter: NumberFormatter = {
@@ -130,10 +145,46 @@ class RegisterViewModel {
         return formatter
     }()
     
+    private var menu: Menu
+    private var notifier: Notifier!
+    
+    init(menu: Menu, notificationCenter: NotificationCenter = .default) {
+        self.menu = menu
+        self.notifier = Notifier(name: Menu.MenuChanged, object: menu, center: notificationCenter) { [weak self] _ in
+            self?.modelUpdated()
+        }
+    }
+    
     var orderItems: [Item] = []
     
+    var bill: Bill {
+        return Bill(items: orderItems, taxes: menu.taxes, discounts: menu.discounts)
+    }
+    
+    var modelUpdated: () -> Void = { }
+    
+    func subtotalString() -> String? {
+        return formatter.string(from: NSDecimalNumber(decimal: bill.totals.subtotal))
+    }
+    
+    func taxString() -> String? {
+        return formatter.string(from: NSDecimalNumber(decimal: bill.totals.tax))
+    }
+    
+    func discountsString() -> String? {
+        return formatter.string(from: NSDecimalNumber(decimal: bill.totals.discounts))
+    }
+    
+    func totalString() -> String? {
+        return formatter.string(from: NSDecimalNumber(decimal: bill.totals.total))
+    }
+    
+    private func category(in section: Int) -> Menu.Category {
+        return menu.categories[section]
+    }
+    
     func menuCategoryTitle(in section: Int) -> String? {
-        return categories[section].name
+        return category(in: section).label
     }
     
     func orderTitle(in section: Int) -> String? {
@@ -141,11 +192,11 @@ class RegisterViewModel {
     }
     
     func numberOfMenuCategories() -> Int {
-        return categories.count
+        return menu.categories.count
     }
     
     func numberOfMenuItems(in section: Int) -> Int {
-        return categories[section].items.count
+        return menu.categories[section].items.count
     }
     
     func numberOfOrderItems(in section: Int) -> Int {
@@ -153,12 +204,12 @@ class RegisterViewModel {
     }
     
     func menuItemName(at indexPath: IndexPath) -> String? {
-        return categories[indexPath.section].items[indexPath.row].name
+        return menu.categories[indexPath.section].items[indexPath.row].name
     }
     
     func menuItemPrice(at indexPath: IndexPath) -> String? {
-        let price = categories[indexPath.section].items[indexPath.row].price
-        return formatter.string(from: price)
+        let price = menu.categories[indexPath.section].items[indexPath.row].price
+        return formatter.string(from: NSDecimalNumber(decimal: price))
     }
     
     func labelForOrderItem(at indexPath: IndexPath) -> String? {
@@ -173,11 +224,11 @@ class RegisterViewModel {
     
     func orderItemPrice(at indexPath: IndexPath) -> String? {
         let price = orderItems[indexPath.row].price
-        return formatter.string(from: price)
+        return formatter.string(from: NSDecimalNumber(decimal: price))
     }
     
     func addItemToOrder(at indexPath: IndexPath) -> IndexPath {
-        let item = categories[indexPath.section].items[indexPath.row]
+        let item = menu.categories[indexPath.section].items[indexPath.row]
         orderItems.append(item)
         return IndexPath(row: orderItems.count - 1, section: 0)
     }
@@ -190,3 +241,4 @@ class RegisterViewModel {
         orderItems[indexPath.row].isTaxExempt = !orderItems[indexPath.row].isTaxExempt
     }
 }
+

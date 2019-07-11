@@ -8,11 +8,12 @@
 
 import Foundation
 import UIKit
+import POSKit
 
 class DiscountViewController: UITableViewController {
     let cellIdentifier = "Cell"
     
-    let viewModel = DiscountViewModel()
+    let viewModel = DiscountViewModel(menu: AppMenu)
     
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -54,7 +55,19 @@ extension DiscountViewController {
     }
 }
 
-class DiscountViewModel {    
+class DiscountViewModel {
+    private var menu: Menu
+    private var notifier: Notifier!
+    
+    init(menu: Menu, notificationCenter: NotificationCenter = .default) {
+        self.menu = menu
+        self.notifier = Notifier(name: Menu.MenuChanged, object: menu, center: notificationCenter) { [weak self] _ in
+            self?.modelUpdated()
+        }
+    }
+    
+    var modelUpdated: () -> Void = { }
+    
     func title(for section: Int) -> String {
         return "Discounts"
     }
@@ -64,17 +77,19 @@ class DiscountViewModel {
     }
     
     func numberOfRows(in section: Int) -> Int {
-        return discounts.count
+        return menu.discounts.count
+    }
+    
+    private func discount(at indexPath: IndexPath) -> Discount {
+        return menu.discounts[indexPath.row]
     }
     
     func labelForDiscount(at indexPath: IndexPath) -> String {
-        let discount = discounts[indexPath.row]
-        return discount.label
+        return discount(at: indexPath).label
     }
     
     func accessoryType(at indexPath: IndexPath) -> UITableViewCell.AccessoryType {
-        let discount = discounts[indexPath.row]
-        if discount.isEnabled {
+        if discount(at: indexPath).isEnabled {
             return .checkmark
         } else {
             return .none
@@ -82,6 +97,10 @@ class DiscountViewModel {
     }
     
     func toggleDiscount(at indexPath: IndexPath) {
-        discounts[indexPath.row].isEnabled = !discounts[indexPath.row].isEnabled
+        menu.toggleDiscountState(discount(at: indexPath))
     }
+}
+
+extension DiscountViewModel {
+    static let DiscountStatusChanged = Notification.Name("DiscountStatusChanged")
 }

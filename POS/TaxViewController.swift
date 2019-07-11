@@ -8,11 +8,12 @@
 
 import Foundation
 import UIKit
+import POSKit
 
 class TaxViewController: UITableViewController {
     let cellIdentifier = "Cell"
     
-    let viewModel = TaxViewModel()
+    let viewModel = TaxViewModel(menu: AppMenu)
     
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -55,6 +56,18 @@ extension TaxViewController {
 }
 
 class TaxViewModel {
+    private var menu: Menu = AppMenu
+    private var notifier: Notifier!
+    
+    init(menu: Menu, notificationCenter: NotificationCenter = .default) {
+        self.menu = menu
+        self.notifier = Notifier(name: Menu.MenuChanged, object: menu, center: notificationCenter) { [weak self] _ in
+            self?.modelUpdated()
+        }
+    }
+    
+    var modelUpdated: () -> Void = { }
+    
     func title(for section: Int) -> String {
         return "Taxes"
     }
@@ -64,17 +77,19 @@ class TaxViewModel {
     }
     
     func numberOfRows(in section: Int) -> Int {
-        return taxes.count
+        return menu.taxes.count
+    }
+    
+    private func tax(at indexPath: IndexPath) -> Tax {
+        return menu.taxes[indexPath.row]
     }
     
     func labelForTax(at indexPath: IndexPath) -> String {
-        let tax = taxes[indexPath.row]
-        return tax.label
+        return tax(at: indexPath).label
     }
     
     func accessoryType(at indexPath: IndexPath) -> UITableViewCell.AccessoryType {
-        let tax = taxes[indexPath.row]
-        if tax.isEnabled {
+        if tax(at: indexPath).isEnabled {
             return .checkmark
         } else {
             return .none
@@ -82,6 +97,6 @@ class TaxViewModel {
     }
     
     func toggleTax(at indexPath: IndexPath) {
-        taxes[indexPath.row].isEnabled = !taxes[indexPath.row].isEnabled
+        menu.toggleTaxState(tax(at: indexPath))
     }
 }
